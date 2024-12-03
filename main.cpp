@@ -1,7 +1,6 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
-#include <sstream>
 #include <string>
 #include <chrono>
 #include <algorithm>
@@ -12,76 +11,82 @@
 using namespace std;
 using namespace std::chrono;
 
-struct Flight {  // struct to hold flight data
-    string carrier;
-    string airport_name;
-    int arr_delay;
+// Struct to hold data related to a flight
+struct Flight {
+    string carrier;        // airline carrier code
+    string airport_name;   // airport where the flight is scheduled to land
+    int arr_delay;         // arrival delay time in minutes
 };
 
-string trim(const string& str) {  // function to trim whitespace
-    size_t first = str.find_first_not_of(" \t\r\n");
+// Function to trim leading and trailing whitespaces from a string
+string trim(const string& str) {
+    size_t first = str.find_first_not_of(" \t\r\n");  // find first non-whitespace character
     if (first == string::npos)
-        return "";
-    size_t last = str.find_last_not_of(" \t\r\n");
-    return str.substr(first, (last - first + 1));
+        return "";  // return empty string if no non-whitespace character found
+    size_t last = str.find_last_not_of(" \t\r\n");   // find last non-whitespace character
+    return str.substr(first, (last - first + 1));  // return the formatted string
 }
 
-vector<string> parseCSVLine(const string& line, char delimiter) {  // function to parse CSV line
-    vector<string> tokens;
-    string token;
-    bool inside_quotes = false;
+// Function to parse a CSV line into tokens separated by a delimiter
+vector<string> parseCSVLine(const string& line, char delimiter) {
+    vector<string> item;  // vector to store the parsed item
+    string currItem;           // current currItem being processed
+    bool inside_quotes = false;  // flag to check if the current character is inside quotes
 
     for (size_t i = 0; i < line.length(); ++i) {
         char c = line[i];
 
-        if (c == '"') {
+        if (c == '"') {  // if quote character is encountered
             if (inside_quotes && i + 1 < line.length() && line[i + 1] == '"') {
-                token += '"';  // escaped quote inside quoted field
+                currItem += '"';  // escaped quote inside quoted field
                 ++i;
             } else {
-                inside_quotes = !inside_quotes;  // toggle quotes flag
+                inside_quotes = !inside_quotes;  // toggle inside_quotes flag
             }
-        } else if (c == delimiter && !inside_quotes) {
-            tokens.push_back(trim(token));  // delimiter outside quotes
-            token.clear();
+        } else if (c == delimiter && !inside_quotes) {  // if delimiter is found outside quotes
+            item.push_back(trim(currItem));  // add currItem to the vector and clear it
+            currItem.clear();
         } else {
-            token += c;
+            currItem += c;  // otherwise, add the character to the currItem
         }
     }
-    tokens.push_back(trim(token));
-    return tokens;
+    item.push_back(trim(currItem));  // add the last currItem
+    return item;
 }
 
-vector<Flight> readFlightData(const string& filename) {  // function to read flight data
-    vector<Flight> flights;
-    ifstream file(filename);
-    if (!file.is_open()) {
+// Function to read flight data from a CSV file
+vector<Flight> readFlightData(const string& filename) {
+    vector<Flight> flights;  // vector to store the flight data
+    ifstream file(filename);  // open the file
+
+    if (!file.is_open()) {  // check if the file is opened successfully
         cerr << "Failed to open file: " << filename << endl;
-        return flights;
+        return flights;  // return an empty vector if file cannot be opened
     }
 
     string line;
-    if (!getline(file, line)) {  // read header line
+    if (!getline(file, line)) {  // read the header line
         cerr << "Failed to read header line from the file." << endl;
-        return flights;
+        return flights;  // return an empty vector if header cannot be read
     }
 
-    char comma = ',';  // detect comma
+    char comma = ',';  // default delimiter is a comma
     if (line.find('\t') != string::npos) {
-        comma = '\t';
+        comma = '\t';  // if tab is found, change delimiter to tab
     }
 
-    vector<string> headers = parseCSVLine(line, comma);
+    vector<string> headers = parseCSVLine(line, comma);  // parse the header line into columns
 
     cout << "Headers:" << endl;
-    for (size_t i = 0; i < headers.size(); ++i) {  // output headers for debugging
+    for (size_t i = 0; i < headers.size(); ++i) {  // output the headers for debugging
         cout << i << ": '" << headers[i] << "'" << endl;
     }
 
     int carrier_idx = -1, airport_name_idx = -1, arr_delay_idx = -1;
-    for (size_t i = 0; i < headers.size(); ++i) {  // find relevant column indices
+    // find the indices of the required columns based on header names
+    for (size_t i = 0; i < headers.size(); ++i) {
         string header_lower = headers[i];
-        transform(header_lower.begin(), header_lower.end(), header_lower.begin(), ::tolower);
+        transform(header_lower.begin(), header_lower.end(), header_lower.begin(), ::tolower);  // convert to lowercase
         header_lower = trim(header_lower);
         if (header_lower == "carrier") carrier_idx = i;
         else if (header_lower == "airport_name") airport_name_idx = i;
@@ -90,58 +95,59 @@ vector<Flight> readFlightData(const string& filename) {  // function to read fli
 
     cout << "carrier_idx: " << carrier_idx << ", airport_name_idx: " << airport_name_idx << ", arr_delay_idx: " << arr_delay_idx << endl;
 
-    if (carrier_idx == -1 || airport_name_idx == -1 || arr_delay_idx == -1) {  // check for missing columns
+    // if any required column is missing, return an empty vector
+    if (carrier_idx == -1 || airport_name_idx == -1 || arr_delay_idx == -1) {
         cerr << "Required columns not found in the CSV file." << endl;
         return flights;
     }
 
-    while (getline(file, line)) {  // read flight data
-        if (line.empty()) continue;
+    while (getline(file, line)) {  // read flight data lines
+        if (line.empty()) continue;  // skip empty lines
 
-        vector<string> tokens = parseCSVLine(line, comma);
+        vector<string> tokens = parseCSVLine(line, comma);  // parse the line into tokens
 
         if (tokens.size() <= max({carrier_idx, airport_name_idx, arr_delay_idx})) {  // skip invalid lines
             continue;
         }
 
         Flight flight;
-        flight.carrier = tokens[carrier_idx];
-        flight.airport_name = tokens[airport_name_idx];
+        flight.carrier = tokens[carrier_idx];  // store the carrier code
+        flight.airport_name = tokens[airport_name_idx];  // store the airport name
 
         try {
-            flight.arr_delay = static_cast<int>(stod(tokens[arr_delay_idx]));  // parse arr_delay
+            flight.arr_delay = static_cast<int>(stod(tokens[arr_delay_idx]));  // parse the arrival delay as an integer
         } catch (const invalid_argument& e) {
-            continue;
+            continue;  // skip lines with invalid delay values
         }
-        flights.push_back(flight);
+        flights.push_back(flight);  // add the flight to the list
     }
 
-    file.close();
-    return flights;
+    file.close();  // close the file
+    return flights;  // return the list of flights
 }
 
+// QuickSort function to sort the flights based on their arrival delay
 void quickSort(vector<Flight>& flights, int low, int high) {
     if (low < high) {
-        // random pivot selection
+        // Randomly select a pivot index and swap it to the end
         int pivotIndex = low + rand() % (high - low + 1);
-        swap(flights[pivotIndex], flights[high]); // move pivot to end
+        swap(flights[pivotIndex], flights[high]);
 
-        int pivot = flights[high].arr_delay;
+        int pivot = flights[high].arr_delay;  // pivot value is the arrival delay
         int i = low - 1;
         for (int j = low; j < high; ++j) {
             if (flights[j].arr_delay <= pivot) {
                 ++i;
-                swap(flights[i], flights[j]);
+                swap(flights[i], flights[j]);  // swap to arrange smaller values before pivot
             }
         }
-        swap(flights[i + 1], flights[high]);
+        swap(flights[i + 1], flights[high]);  // place pivot in its correct position
         int pi = i + 1;
 
-        quickSort(flights, low, pi - 1);
-        quickSort(flights, pi + 1, high);
+        quickSort(flights, low, pi - 1);  // recursively sort the left partition
+        quickSort(flights, pi + 1, high);  // recursively sort the right partition
     }
 }
-
 
 // Placeholder for merge sort implementation
 void mergeSort(vector<Flight>& flights, int left, int right) {
@@ -150,40 +156,43 @@ void mergeSort(vector<Flight>& flights, int left, int right) {
     // based on arr_delay using the merge sort algorithm. make sure to check out comments in int main as well
 }
 
-vector<Flight> getBestCase(const vector<Flight>& flights) {  // best case (sorted)
+// Function to return the best case (already sorted data)
+vector<Flight> getBestCase(const vector<Flight>& flights) {
     vector<Flight> sortedFlights = flights;
     sort(sortedFlights.begin(), sortedFlights.end(), [](const Flight& a, const Flight& b) {
-        return a.arr_delay < b.arr_delay;
+        return a.arr_delay < b.arr_delay;  // sort by ascending arrival delay
     });
     return sortedFlights;
 }
 
-vector<Flight> getWorstCase(const vector<Flight>& flights) {  // worst case (reverse sorted)
+// Function to return the worst case (reverse sorted data)
+vector<Flight> getWorstCase(const vector<Flight>& flights) {
     vector<Flight> sortedFlights = flights;
     sort(sortedFlights.begin(), sortedFlights.end(), [](const Flight& a, const Flight& b) {
-        return a.arr_delay > b.arr_delay;
+        return a.arr_delay > b.arr_delay;  // sort by descending arrival delay
     });
     return sortedFlights;
 }
 
-vector<Flight> getAverageCase(const vector<Flight>& flights) {  // average case (shuffled)
+// Function to return the average case (shuffled data)
+vector<Flight> getAverageCase(const vector<Flight>& flights) {
     vector<Flight> shuffledFlights = flights;
-    random_shuffle(shuffledFlights.begin(), shuffledFlights.end());
+    random_shuffle(shuffledFlights.begin(), shuffledFlights.end());  // shuffle the data
     return shuffledFlights;
 }
 
 int main() {
-    string filename = "C:/Users/peyto/Airline_Delay_Cause.csv";
-    vector<Flight> flights = readFlightData(filename);
+    string filename = "Airline_Delay_Cause.csv";  // input CSV file name
+    vector<Flight> flights = readFlightData(filename);  // read flight data from the file
 
-    if (flights.empty()) {  // check if data is empty
+    if (flights.empty()) {  // if no data is read, terminate
         cerr << "No data to sort." << endl;
         return 1;
     }
 
-    set<string> validCarriers;
-    for (const auto& flight : flights) {  // collect valid airline names
-        validCarriers.insert(flight.carrier);
+    set<string> validCarriers;  // set to store valid airline carriers
+    for (const auto& flight : flights) {
+        validCarriers.insert(flight.carrier);  // add unique carriers to the set
     }
 
     int sortingMethod = 0;
@@ -191,9 +200,10 @@ int main() {
     cout << "1. Quick Sort\n";
     cout << "2. Merge Sort\n";
     cout << "Enter your choice (1 or 2): ";
-    cin >> sortingMethod;
+    cin >> sortingMethod;  // user input for sorting method
 
-    while (sortingMethod != 1 && sortingMethod != 2) {  // validate sorting method
+    // Validate sorting method input
+    while (sortingMethod != 1 && sortingMethod != 2) {
         cout << "Invalid choice. Please enter 1 or 2: ";
         cin >> sortingMethod;
     }
@@ -203,27 +213,30 @@ int main() {
     cout << "1. An airline carrier\n";
     cout << "2. An airport (city name)\n";
     cout << "Enter your choice (1 or 2): ";
-    cin >> filterChoice;
+    cin >> filterChoice;  // user input for filter choice
 
-    while (filterChoice != 1 && filterChoice != 2) {  // validate filter choice
+    // Validate filter choice input
+    while (filterChoice != 1 && filterChoice != 2) {
         cout << "Invalid choice. Please enter 1 or 2: ";
         cin >> filterChoice;
     }
 
     vector<Flight> selectedFlights;
 
-    if (filterChoice == 1) {  // filter by airline
+    // Filter the flights based on the user's choice (airline or airport)
+    if (filterChoice == 1) {
         string airlineName;
         cout << "Enter the airline carrier code (e.g., AA, DL, UA): ";
         cin >> airlineName;
 
-        while (validCarriers.find(airlineName) == validCarriers.end()) {  // validate airline code
+        // Validate airline carrier code input
+        while (validCarriers.find(airlineName) == validCarriers.end()) {
             cout << "Invalid airline carrier code. Please enter a valid airline code: ";
             cin >> airlineName;
         }
 
-        for (const auto& flight : flights) {  // filter flights by carrier
-            if (flight.carrier == airlineName) {
+        for (const auto& flight : flights) {
+            if (flight.carrier == airlineName) {  // add flights that match the carrier
                 selectedFlights.push_back(flight);
             }
         }
@@ -232,20 +245,21 @@ int main() {
             cout << "No flights found for the airline: " << airlineName << endl;
             return 1;
         }
-    } else if (filterChoice == 2) {  // filter by airport
+    } else if (filterChoice == 2) {
         string airportName;
         cout << "Enter the airport city name (e.g., Chicago, Birmingham): ";
         cin.ignore();
-        getline(cin, airportName);
+        getline(cin, airportName);  // allow input with spaces
 
+        // Convert the airport name to lowercase for case-insensitive comparison
         string airportNameLower = airportName;
         transform(airportNameLower.begin(), airportNameLower.end(), airportNameLower.begin(), ::tolower);
 
-        for (const auto& flight : flights) {  // filter flights by airport
+        for (const auto& flight : flights) {
             string flightAirportNameLower = flight.airport_name;
             transform(flightAirportNameLower.begin(), flightAirportNameLower.end(), flightAirportNameLower.begin(), ::tolower);
 
-            if (flightAirportNameLower.find(airportNameLower) != string::npos) {
+            if (flightAirportNameLower.find(airportNameLower) != string::npos) {  // if airport matches
                 selectedFlights.push_back(flight);
             }
         }
@@ -256,36 +270,36 @@ int main() {
         }
     }
 
+    // Display sorting method chosen
     if (sortingMethod == 1) {
         cout << "\nYou selected Quick Sort.\n";
     } else if (sortingMethod == 2) {
         cout << "\nYou selected Merge Sort.\n";
     }
 
-    cout << fixed << setprecision(2);
+    cout << fixed << setprecision(2);  // format the output to 2 decimal places
 
-    // best case sorting
+    // Best case sorting (already sorted data)
     vector<Flight> bestCaseData = getBestCase(selectedFlights);
-    auto start = high_resolution_clock::now();
+    auto start = high_resolution_clock::now();  // start timing
 
     if (sortingMethod == 1) {
-        quickSort(bestCaseData, 0, bestCaseData.size() - 1);
+        quickSort(bestCaseData, 0, bestCaseData.size() - 1);  // perform quick sort
     } else {
-        // FIXME: need to implement merge sort call here
-        // call mergeSort for best case data
+        // FIXME: implement merge sort call
         mergeSort(bestCaseData, 0, bestCaseData.size() - 1);
     }
 
-    auto end = high_resolution_clock::now();
+    auto end = high_resolution_clock::now();  // end timing
     auto durationBest = duration<double, milli>(end - start);
     cout << "\nBest Case (Already Sorted) Sorting Time: " << durationBest.count() << " ms" << endl;
 
-    if (!bestCaseData.empty()) {  // output delays for best case
-        cout << "Shortest delay: " << bestCaseData.front().arr_delay << " minutes" << endl;
-        cout << "Longest delay: " << bestCaseData.back().arr_delay << " minutes" << endl;
+    if (!bestCaseData.empty()) {
+        cout << "Shortest delay: " << bestCaseData.front().arr_delay << " minutes" << endl;  // display shortest delay
+        cout << "Longest delay: " << bestCaseData.back().arr_delay << " minutes" << endl;  // display longest delay
     }
 
-    // worst case sorting
+    // Worst case sorting (reverse sorted data)
     vector<Flight> worstCaseData = getWorstCase(selectedFlights);
     start = high_resolution_clock::now();
 
@@ -293,7 +307,6 @@ int main() {
         quickSort(worstCaseData, 0, worstCaseData.size() - 1);
     } else {
         // FIXME: implement merge sort call
-        // Call mergeSort for worst case data
         mergeSort(worstCaseData, 0, worstCaseData.size() - 1);
     }
 
@@ -301,12 +314,12 @@ int main() {
     auto durationWorst = duration<double, milli>(end - start);
     cout << "\nWorst Case (Reverse Sorted) Sorting Time: " << durationWorst.count() << " ms" << endl;
 
-    if (!worstCaseData.empty()) {  // output delays for worst case
+    if (!worstCaseData.empty()) {
         cout << "Shortest delay: " << worstCaseData.front().arr_delay << " minutes" << endl;
         cout << "Longest delay: " << worstCaseData.back().arr_delay << " minutes" << endl;
     }
 
-    // average case sorting
+    // Average case sorting (shuffled data)
     vector<Flight> averageCaseData = getAverageCase(selectedFlights);
     start = high_resolution_clock::now();
 
@@ -314,7 +327,6 @@ int main() {
         quickSort(averageCaseData, 0, averageCaseData.size() - 1);
     } else {
         // FIXME: implement merge sort call
-        // call mergeSort for average case data
         mergeSort(averageCaseData, 0, averageCaseData.size() - 1);
     }
 
@@ -322,7 +334,7 @@ int main() {
     auto durationAverage = duration<double, milli>(end - start);
     cout << "\nAverage Case (Random Order) Sorting Time: " << durationAverage.count() << " ms" << endl;
 
-    if (!averageCaseData.empty()) {  // output delays for average case
+    if (!averageCaseData.empty()) {
         cout << "Shortest delay: " << averageCaseData.front().arr_delay << " minutes" << endl;
         cout << "Longest delay: " << averageCaseData.back().arr_delay << " minutes" << endl;
     }
